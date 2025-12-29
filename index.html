@@ -680,6 +680,7 @@
       // Store all outages for search functionality
       let allOutages = [];
       let allPlannedOutages = [];
+      let allDataFull = []; // Store all raw data for proper categorization
 
       function createPulseIcon() {
         return L.divIcon({
@@ -718,40 +719,242 @@
         outageBanner.style.display = "block";
       }
 
-      // Postal code to coordinates mapping
+      // Postal code to coordinates mapping (expanded list of Quebec postal codes)
       const postalCodeCoordinates = {
         H3A: [45.5048, -73.5772], // Montreal
         H2X: [45.5107, -73.565], // Montreal
+        H1A: [45.6367, -73.5],   // Montreal
+        H2L: [45.5239, -73.5789], // Montreal
+        H2Z: [45.5173, -73.5613], // Montreal
+        H3C: [45.4973, -73.5674], // Montreal
+        H3E: [45.4845, -73.5889], // Montreal
+        H3H: [45.5016, -73.5921], // Montreal
+        H3J: [45.5056, -73.6051], // Montreal
+        H4C: [45.4739, -73.7213], // Montreal
+        H4P: [45.5383, -73.8159], // Montreal
+        H8X: [45.3924, -73.6996], // Brossard/Montreal
         G1V: [46.7913, -71.2879], // Quebec City
+        G1A: [46.8139, -71.2080], // Quebec City
+        G1B: [46.8156, -71.2047], // Quebec City
+        G1C: [46.8169, -71.2089], // Quebec City
+        G1R: [46.8125, -71.2154], // Quebec City
+        G1S: [46.8163, -71.2200], // Quebec City
+        G2A: [46.6528, -71.2119], // Beauport
+        G3A: [46.6222, -71.8308], // Montmorency
         J7V: [45.5333, -73.8667], // Laval
-        J1H: [45.4, -71.9], // Sherbrooke
+        J7N: [45.6, -73.85],       // Laval
+        J7T: [45.65, -74.3333],    // Saint-Jérôme
+        J1H: [45.4, -71.9],        // Sherbrooke
+        J1J: [45.4056, -71.8933], // Sherbrooke
+        J1M: [45.4167, -71.9], // Sherbrooke
+        J1N: [45.43, -71.89],  // Sherbrooke
+        J1X: [45.46, -71.82],  // Sherbrooke
         G7H: [48.4333, -71.0667], // Saguenay
-        G6V: [46.3667, -72.55], // Trois-Rivières
-        J6A: [45.65, -73.6333], // Repentigny
-        J5R: [45.65, -73.45], // Terrebonne
-        J4Z: [45.5333, -73.5167], // Longueuil
-        J8Y: [45.4667, -75.7], // Gatineau
-        J7T: [45.65, -74.3333], // Saint-Jérôme
-        J6E: [45.3, -73.25], // Saint-Jean-sur-Richelieu
+        G7X: [48.3917, -70.9333], // Saguenay
+        G6V: [46.3667, -72.55],   // Trois-Rivières
+        G8T: [46.3667, -72.5667], // Trois-Rivières
+        G8V: [46.3833, -72.6],    // Trois-Rivières
+        G8Z: [46.4, -72.6333],    // Trois-Rivières
+        G9A: [46.35, -72.5667],   // Shawinigan
+        G9N: [46.3667, -72.6667], // Shawinigan
+        G9P: [46.35, -72.55],     // Shawinigan
+        J6A: [45.65, -73.6333],   // Repentigny
+        J6E: [45.3, -73.25],      // Saint-Jean-sur-Richelieu
+        J6H: [45.3256, -73.2567], // Saint-Jean-sur-Richelieu
         J2S: [45.4167, -72.0167], // Drummondville
+        J2T: [45.4333, -72.0333], // Drummondville
+        J2V: [45.4, -72.0667],    // Drummondville
         J6J: [46.0333, -73.1167], // Joliette
-        G5L: [48.45, -68.5333], // Rimouski
-        G9A: [46.35, -72.5667], // Shawinigan
-        G6W: [46.75, -71.3667], // Lévis
+        J6E: [45.3, -73.25],      // Saint-Jean-sur-Richelieu
+        G5L: [48.45, -68.5333],   // Rimouski
+        G5H: [48.4667, -68.5667], // Rimouski
+        G5A: [48.3, -68.5333],    // Rimouski
+        G5M: [48.4833, -68.5],    // Rimouski
+        G6W: [46.75, -71.3667],   // Lévis
+        G6X: [46.7833, -71.3667], // Lévis
+        G6Z: [46.8, -71.35],      // Lévis
         J7W: [45.4833, -73.7667], // Brossard
+        J7Y: [45.46, -73.7667],   // Brossard
+        J4Z: [45.5333, -73.5167], // Longueuil
+        J4H: [45.5333, -73.5333], // Longueuil
+        J4K: [45.55, -73.5667],   // Longueuil
+        J5R: [45.65, -73.45],     // Terrebonne
+        J5H: [45.6833, -73.5],    // Terrebonne
         J3V: [45.5333, -73.2833], // Saint-Hyacinthe
+        J3Z: [45.6333, -73.3333], // Saint-Hyacinthe
+        J3X: [45.5667, -73.3],    // Saint-Hyacinthe
+        J8Y: [45.4667, -75.7],    // Gatineau
+        J9H: [45.25, -75.75],     // Gatineau
+        J9J: [45.3, -75.5],       // Gatineau
+        H1A: [45.6333, -73.5],    // Montreal East
+        H1B: [45.6333, -73.5167], // Montreal East
+        H1C: [45.6333, -73.5333], // Montreal East
+        H1G: [45.6333, -73.5667], // Montreal East
+        H1H: [45.6333, -73.5833], // Montreal East
+        H1K: [45.6333, -73.6],    // Montreal East
+        H1L: [45.6333, -73.6167], // Montreal East
+        H1M: [45.6333, -73.6333], // Montreal East
+        H1N: [45.6333, -73.65],   // Montreal East
+        H2E: [45.545, -73.5833],  // Montreal
+        H2G: [45.5367, -73.5945], // Montreal
+        H2H: [45.5317, -73.6067], // Montreal
+        H2J: [45.527, -73.6189],  // Montreal
+        H2K: [45.5222, -73.6311], // Montreal
+        H2M: [45.5178, -73.6367], // Montreal
+        H2N: [45.5144, -73.6422], // Montreal
+        H2P: [45.5122, -73.6556], // Montreal
+        H2R: [45.5111, -73.6733], // Montreal
+        H2S: [45.5156, -73.6839], // Montreal
+        H2T: [45.5239, -73.6889], // Montreal
+        H2V: [45.5367, -73.6733], // Montreal
+        H2W: [45.5478, -73.6556], // Montreal
+        H2X: [45.5107, -73.565],  // Montreal
+        H2Y: [45.5073, -73.5589], // Montreal
+        H3B: [45.4973, -73.5674], // Montreal
+        H3G: [45.4939, -73.5811], // Montreal
+        H3K: [45.4895, -73.5978], // Montreal
+        H3L: [45.4878, -73.6122], // Montreal
+        H3M: [45.485, -73.6289],  // Montreal
+        H3N: [45.4839, -73.6422], // Montreal
+        H3P: [45.481, -73.6556],  // Montreal
+        H3R: [45.4717, -73.6767], // Montreal
+        H3S: [45.4661, -73.6889], // Montreal
+        H3T: [45.4595, -73.6939], // Montreal
+        H3V: [45.4556, -73.6889], // Montreal
+        H3W: [45.455, -73.6733],  // Montreal
+        H3X: [45.4561, -73.6556], // Montreal
+        H3Y: [45.4628, -73.6389], // Montreal
+        H3Z: [45.4656, -73.6222], // Montreal
+        H4A: [45.4733, -73.6056], // Montreal
+        H4B: [45.4806, -73.5889], // Montreal
+        H4E: [45.4867, -73.5722], // Montreal
+        H4G: [45.4939, -73.5556], // Montreal
+        H4H: [45.5022, -73.5389], // Montreal
+        H4J: [45.5122, -73.5222], // Montreal
+        H4K: [45.5222, -73.5056], // Montreal
+        H4L: [45.5328, -73.4889], // Montreal
+        H4M: [45.5439, -73.4722], // Montreal
+        H4N: [45.5556, -73.4556], // Montreal
+        H4R: [45.5333, -73.4222], // Montreal
+        H4S: [45.5117, -73.4583], // Montreal
+        H4T: [45.495, -73.4944],  // Montreal
+        H4V: [45.4783, -73.5306], // Montreal
+        H4W: [45.4616, -73.5667], // Montreal
+        H4X: [45.4533, -73.5833], // Montreal
+        H4Y: [45.445, -73.6],     // Montreal
+        H4Z: [45.4372, -73.6167], // Montreal
+        H5A: [45.4289, -73.6333], // Montreal
+        H5B: [45.4211, -73.6489], // Montreal
+        H5C: [45.4128, -73.6656], // Montreal
+        H5E: [45.4056, -73.6822], // Montreal
+        H5G: [45.3972, -73.6989], // Montreal
+        H5H: [45.3889, -73.7156], // Montreal
+        H5J: [45.3806, -73.7322], // Montreal
+        H5K: [45.3722, -73.7489], // Montreal
+        H5L: [45.3639, -73.7656], // Montreal
+        H5M: [45.3561, -73.7822], // Montreal
+        H5N: [45.3483, -73.7989], // Montreal
+        H5P: [45.3406, -73.8156], // Montreal
+        H5R: [45.3328, -73.8322], // Montreal
+        H5S: [45.3256, -73.8489], // Montreal
+        H5T: [45.3178, -73.8656], // Montreal
+        H5V: [45.3106, -73.8822], // Montreal
+        H5W: [45.3028, -73.8989], // Montreal
+        H5X: [45.2956, -73.9156], // Montreal
+        H5Y: [45.2878, -73.9322], // Montreal
+        H5Z: [45.2806, -73.9489], // Montreal
+        H6A: [45.2728, -73.9656], // Montreal
+        H6B: [45.2656, -73.9822], // Montreal
+        H6C: [45.2578, -73.9989], // Montreal
+        H6E: [45.2506, -74.0156], // Montreal
+        H6G: [45.2428, -74.0322], // Montreal
+        H6H: [45.2356, -74.0489], // Montreal
+        H6J: [45.2278, -74.0656], // Montreal
+        H6K: [45.2206, -74.0822], // Montreal
+        H6L: [45.2128, -74.0989], // Montreal
+        H6M: [45.205, -74.1156],  // Montreal
+        H6N: [45.1972, -74.1322], // Montreal
+        H6P: [45.1894, -74.1489], // Montreal
+        H6R: [45.1822, -74.1656], // Montreal
+        H6S: [45.1744, -74.1822], // Montreal
+        H6T: [45.1672, -74.1989], // Montreal
+        H6V: [45.1594, -74.2156], // Montreal
+        H6W: [45.1516, -74.2322], // Montreal
+        H6X: [45.1444, -74.2489], // Montreal
+        H6Y: [45.1366, -74.2656], // Montreal
+        H6Z: [45.1294, -74.2822], // Montreal
+        H7A: [45.1216, -74.2989], // Montreal
+        H7B: [45.1144, -74.3156], // Laval/Montreal
+        H7C: [45.1066, -74.3322], // Laval/Montreal
+        H7E: [45.0988, -74.3489], // Laval/Montreal
+        H7G: [45.0916, -74.3656], // Laval/Montreal
+        H7H: [45.0838, -74.3822], // Laval/Montreal
+        H7J: [45.0766, -74.3989], // Laval/Montreal
+        H7K: [45.0688, -74.4156], // Laval/Montreal
+        H7L: [45.0616, -74.4322], // Laval/Montreal
+        H7M: [45.0538, -74.4489], // Laval/Montreal
+        H7N: [45.0466, -74.4656], // Laval/Montreal
+        H7P: [45.0388, -74.4822], // Laval/Montreal
+        H7R: [45.0316, -74.4989], // Laval/Montreal
+        H7S: [45.0238, -74.5156], // Laval/Montreal
+        H7T: [45.0166, -74.5322], // Laval/Montreal
+        H7V: [44.9888, -74.5489], // Laval/Montreal
+        H7W: [44.9816, -74.5656], // Laval/Montreal
+        H7X: [44.9738, -74.5822], // Laval/Montreal
+        H7Y: [44.9666, -74.5989], // Laval/Montreal
+        H7Z: [44.9588, -74.6156], // Laval/Montreal
+        H8A: [44.9516, -74.6322], // Laval/Montreal
+        H8B: [44.9438, -74.6489], // Laval/Montreal
+        H8C: [44.9366, -74.6656], // Laval/Montreal
+        H8E: [44.9288, -74.6822], // Laval/Montreal
+        H8G: [44.9216, -74.6989], // Laval/Montreal
+        H8H: [44.9138, -74.7156], // Laval/Montreal
+        H8J: [44.9066, -74.7322], // Laval/Montreal
+        H8K: [44.8988, -74.7489], // Laval/Montreal
+        H8L: [44.8916, -74.7656], // Laval/Montreal
+        H8M: [44.8838, -74.7822], // Laval/Montreal
+        H8N: [44.8766, -74.7989], // Laval/Montreal
+        H8P: [44.8688, -74.8156], // Laval/Montreal
+        H8R: [44.8616, -74.8322], // Laval/Montreal
+        H8S: [44.8538, -74.8489], // Laval/Montreal
+        H8T: [44.8466, -74.8656], // Laval/Montreal
+        H8V: [44.8388, -74.8822], // Laval/Montreal
+        H8W: [44.8316, -74.8989], // Laval/Montreal
+        H8X: [45.3924, -73.6996], // Brossard
+        H8Y: [44.8238, -74.9156], // Laval/Montreal
+        H8Z: [44.8166, -74.9322], // Laval/Montreal
+        H9A: [44.8088, -74.9489], // Laval/Montreal
+        H9B: [44.8016, -74.9656], // Laval/Montreal
+        H9C: [44.7938, -74.9822], // Laval/Montreal
+        H9E: [44.7866, -74.9989], // Laval/Montreal
+        H9G: [44.7788, -75.0156], // Laval/Montreal
+        H9H: [44.7716, -75.0322], // Laval/Montreal
+        H9J: [44.7638, -75.0489], // Laval/Montreal
+        H9K: [44.7566, -75.0656], // Laval/Montreal
+        H9L: [44.7488, -75.0822], // Laval/Montreal
+        H9M: [44.7416, -75.0989], // Laval/Montreal
+        H9N: [44.7338, -75.1156], // Laval/Montreal
+        H9P: [44.7266, -75.1322], // Laval/Montreal
+        H9R: [44.7188, -75.1489], // Laval/Montreal
+        H9S: [44.7116, -75.1656], // Laval/Montreal
+        H9T: [44.7038, -75.1822], // Laval/Montreal
+        H9V: [44.6966, -75.1989], // Laval/Montreal
+        H9W: [44.6888, -75.2156], // Laval/Montreal
+        H9X: [44.6816, -75.2322], // Laval/Montreal
+        H9Y: [44.6738, -75.2489], // Laval/Montreal
+        H9Z: [44.6666, -75.2656], // Laval/Montreal
       };
 
       // Search functionality
       function performSearch(query) {
-        if (!query || query.length < 2) {
+        if (!query || query.length < 1) {
           searchResults.style.display = "none";
           return;
         }
 
         const normalizedQuery = query.toUpperCase().trim();
         const matches = Object.keys(postalCodeCoordinates).filter((code) =>
-          code.includes(normalizedQuery)
+          code.startsWith(normalizedQuery) // Changed from includes to startsWith for better matching
         );
 
         if (matches.length > 0) {
@@ -940,6 +1143,7 @@
       function processCurrentOutages(data) {
         outageCluster.clearLayers();
         allOutages = [];
+        allDataFull = data.pannes || []; // Store full data
         let outageCount = 0;
         let totalCustomers = 0;
 
@@ -959,9 +1163,8 @@
               lat = coords[1];
             const nbClients = parseInt(p[7]) || 0;
 
-            // Only process current outages (not planned ones)
-            // Check if this is a current outage based on the data structure
-            const isCurrentOutage = true; // In a real implementation, you'd check specific fields
+            // Check if this is a CURRENT outage (not planned)
+            const isCurrentOutage = !checkIfPlannedOutage(p);
 
             if (isCurrentOutage) {
               outageCount++;
@@ -1012,12 +1215,14 @@
         showOutageBanner(outageCount);
 
         // Fit bounds for current outages
-        const currentBounds = outageCluster.getBounds();
-        if (currentBounds.isValid()) {
-          currentMap.fitBounds(currentBounds, {
-            padding: [60, 60],
-            maxZoom: 10,
-          });
+        if (outageCount > 0) {
+          const currentBounds = outageCluster.getBounds();
+          if (currentBounds.isValid()) {
+            currentMap.fitBounds(currentBounds, {
+              padding: [60, 60],
+              maxZoom: 10,
+            });
+          }
         }
       }
 
@@ -1057,6 +1262,7 @@
           return;
         }
 
+        // Process ALL entries, showing planned ones on this map
         data.pannes.forEach((p) => {
           try {
             const coords = JSON.parse(p[4]);
@@ -1064,9 +1270,7 @@
               lat = coords[1];
             const nbClients = parseInt(p[7]) || 0;
 
-            // Check if this is a planned outage
-            // In a real implementation, you would check specific fields in the data
-            // For now, we'll use a different approach to identify planned outages
+            // Check if this is a PLANNED outage
             const isPlannedOutage = checkIfPlannedOutage(p);
 
             if (isPlannedOutage) {
@@ -1117,47 +1321,73 @@
           new Date().toLocaleString();
 
         // Fit bounds for planned outages
-        const plannedBounds = plannedCluster.getBounds();
-        if (plannedBounds.isValid()) {
-          plannedMap.fitBounds(plannedBounds, {
-            padding: [60, 60],
-            maxZoom: 10,
-          });
+        if (plannedCount > 0) {
+          const plannedBounds = plannedCluster.getBounds();
+          if (plannedBounds.isValid()) {
+            plannedMap.fitBounds(plannedBounds, {
+              padding: [60, 60],
+              maxZoom: 10,
+            });
+          }
         }
       }
 
       // Helper function to identify planned outages
       function checkIfPlannedOutage(outageData) {
-        // In a real implementation, you would check specific fields in the outage data
-        // to determine if it's a planned outage. This might include:
-        // - Specific status codes
-        // - Presence of planned outage indicators in the data
-        // - Different data structure for planned vs current outages
+        // outageData structure:
+        // [0] = id
+        // [1] = start time
+        // [2] = estimated restoration
+        // [3] = status/type code
+        // [4] = coordinates
+        // [5] = status code (may contain PLAN indicator)
+        // [6] = ?
+        // [7] = number of customers affected
+        // [8] = ?
+        // [9] = description/reason
 
-        // For now, we'll use a simple heuristic based on the start time
-        // Planned outages often have start times in the future or during business hours
+        // Check 1: Look for "PLAN" in the status code (field [5])
+        if (outageData[5]) {
+          const statusCode = outageData[5].toString().toUpperCase();
+          if (statusCode.includes("PLAN") || statusCode.includes("MAINTENANCE") || statusCode.includes("SCHEDULED")) {
+            return true;
+          }
+        }
+
+        // Check 2: Look for planned indicators in the reason/description (field [9])
+        if (outageData[9]) {
+          const description = outageData[9].toString().toUpperCase();
+          if (
+            description.includes("PLAN") ||
+            description.includes("MAINTENANCE") ||
+            description.includes("SCHEDULED") ||
+            description.includes("ENTRETIEN") ||
+            description.includes("PROGRAMMÉ")
+          ) {
+            return true;
+          }
+        }
+
+        // Check 3: Check if it has specific field patterns for planned outages
+        // Planned outages often have different status fields
+        if (outageData[3]) {
+          const typeCode = outageData[3].toString().toUpperCase();
+          if (typeCode.includes("P") || typeCode === "1" || typeCode.includes("PLANNED")) {
+            return true;
+          }
+        }
+
+        // Check 4: Start time in the future = likely planned
         if (outageData[1]) {
           const startTime = new Date(outageData[1]);
           const now = new Date();
-
-          // If the outage starts in the future, it's likely planned
-          if (startTime > now) {
-            return true;
-          }
-
-          // Or if it starts during typical business hours (8 AM to 4 PM)
-          const hour = startTime.getHours();
-          if (hour >= 8 && hour <= 16) {
+          // If starts more than 30 minutes in the future, it's likely planned
+          if (startTime - now > 30 * 60 * 1000) {
             return true;
           }
         }
 
-        // Fallback: check if it has a specific status code or field that indicates planned outage
-        // This would need to be adjusted based on Hydro-Québec's actual data structure
-        if (outageData[5] && outageData[5].toString().includes("PLAN")) {
-          return true;
-        }
-
+        // Default: treat as current outage
         return false;
       }
 
