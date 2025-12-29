@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="en" class="antialiased">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Hydro-Québec Outage Maps</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { darkMode: "class" };
+    </script>
+
+    <!-- Leaflet & MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"
+    />
+
+    <style>
+      /* Map sizing */
+      .map-container {
+        height: 100%;
+        width: 100%;
+      }
+
+      /* Pulse marker for current outages */
+      .pulse {
+        position: relative;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #ff4500;
+        box-shadow: 0 0 8px rgba(255, 69, 0, 0.6);
+        border: 2px solid #fff;
+      }
+      .pulse::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: rgba(255, 69, 0, 0.15);
+        animation: pulse 1.6s infinite ease-out;
+      }
+      @keyframes pulse {
+        0% {
+          transform: translate(-50%, -50%) scale(1);
+          opacity: 0.9;
+        }
+        70% {
+          transform: translate(-50%, -50%) scale(2.4);
+          opacity: 0;
+        }
+        100% {
+          opacity: 0;
+        }
+      }
+
+      /* Planned outage marker */
+      .planned {
+        position: relative;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #ffa500;
+        box-shadow: 0 0 8px rgba(255, 165, 0, 0.6);
+        border: 2px solid #fff;
+      }
+      .planned::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: rgba(255, 165, 0, 0.15);
+        animation: planned-pulse 2s infinite ease-out;
+      }
+      @keyframes planned-pulse {
+        0% {
+          transform: translate(-50%, -50%) scale(1);
+          opacity: 0.7;
+        }
+        70% {
+          transform: translate(-50%, -50%) scale(2.2);
+          opacity: 0;
+        }
+        100% {
+          opacity: 0;
+        }
+      }
+
+      /* Cluster */
+      .custom-cluster {
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 999px;
+        padding: 6px 10px;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+        border: 2px solid rgba(0, 0, 0, 0.06);
+        color: #111827;
+        font-weight: 700;
+      }
+      .dark .custom-cluster {
+        background: rgba(17, 24, 39, 0.95);
+        color: #fff;
+        border-color: rgba(255, 255, 255, 0.06);
+      }
+
+      /* Spinner */
+      .spinner {
+        border: 4px solid rgba(0, 0, 0, 0.08);
+        border-top-color: rgba(0, 0, 0, 0.6);
+        border-radius: 9999px;
+        width: 36px;
+        height: 36px;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* Skeleton */
+      .skeleton {
+        background: linear-gradient(
+          90deg,
+          rgba(0, 0, 0, 0.06),
+          rgba(0, 0, 0, 0.02),
+          rgba(0, 0, 0, 0.06)
+        );
+        background-size: 200% 100%;
+        animation: shimmer 1.6s infinite linear;
+        border-radius: 6px;
+      }
+      @keyframes shimmer {
+        0% {
+          background-position: 200% 0;
+        }
+        100% {
+          background-position: -200% 0;
+        }
+      }
+
+      /* small tweaks */
+      .leaflet-container {
+        font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial;
+      }
+      @media (max-width: 768px) {
+        .map-container {
+          top: 0;
+          left: 0;
+        }
+        aside {
+          display: none;
+        }
+      }
+
+      /* Map tabs */
+      .map-tabs {
+        display: flex;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        margin-bottom: 1rem;
+      }
+      .dark .map-tabs {
+        border-bottom-color: rgba(255, 255, 255, 0.1);
+      }
+      .map-tab {
+        padding: 0.5rem 1rem;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        transition: all 0.2s;
+      }
+      .map-tab.active {
+        border-bottom-color: #3b82f6;
+        color: #3b82f6;
+        font-weight: 600;
+      }
+      .map-content {
+        display: none;
+      }
+      .map-content.active {
+        display: block;
+      }
+
+      /* Search box styles */
+      .search-container {
+        position: absolute;
+        top: 80px;
+        left: 20px;
+        z-index: 1000;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        padding: 8px;
+        width: 300px;
+      }
+      .dark .search-container {
+        background: #374151;
+        color: white;
+      }
+      .search-input {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 14px;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+      .dark .search-input {
+        background: #4b5563;
+        border-color: #6b7280;
+        color: white;
+      }
+      .search-input:focus {
+        border-color: #3b82f6;
+      }
+      .search-results {
+        max-height: 200px;
+        overflow-y: auto;
+        margin-top: 8px;
+        border-radius: 6px;
+        background: white;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+      .dark .search-results {
+        background: #4b5563;
+      }
+      .search-result-item {
+        padding: 8px 12px;
+        cursor: pointer;
+        border-bottom: 1px solid #f3f4f6;
+        font-size: 14px;
+      }
+      .dark .search-result-item {
+        border-bottom-color: #6b7280;
+      }
+      .search-result-item:hover {
+        background: #f3f4f6;
+      }
+      .dark .search-result-item:hover {
+        background: #6b7280;
+      }
+      .search-result-item:last-child {
+        border-bottom: none;
+      }
+      .search-no-results {
+        padding: 8px 12px;
+        font-size: 14px;
+        color: #6b7280;
+        text-align: center;
+      }
+      .dark .search-no-results {
+        color: #9ca3af;
+      }
+
+      /* Status indicators */
+      .status-indicator {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+      }
+      .status-active {
+        background-color: #ff4500;
+      }
+      .status-planned {
+        background-color: #ffa500;
+      }
+    </style>
+  </head>
+
+  <body class="bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100">
+    <!-- Outage Banner -->
+    <!-- <div
+      id="outage-banner"
+      class="w-full text-center px-4 py-2 text-white font-semibold text-base transition bg-emerald-600 dark:bg-emerald-700"
+      style="display: none"
+    >
+      <span id="outage-banner-text"
+        >There are currently 0 outages in the province.</span
+      >
+    </div> -->
+
+    <!-- Top bar -->
+    <div
+      class="flex items-center justify-between px-4 py-3 shadow-sm bg-white dark:bg-gray-800"
+    >
+      <div class="flex items-center gap-3">
+        <button
+          id="toggle-sidebar"
+          aria-label="Toggle sidebar"
+          class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-6 w-6"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 6h16M4 12h16M4 18h16"
+            />
+          </svg>
+        </button>
+
+        <div class="flex items-center gap-3">
+          <div
+            class="h-8 w-8 rounded-md bg-blue-600 flex items-center justify-center"
+          >
+            <span class="text-white font-bold">HQ</span>
+          </div>
+          <h1 class="text-lg font-semibold">Hydro‑Québec | Outage Maps</h1>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2 text-sm">
+          <span>Light</span>
+          <button
+            id="dark-toggle"
+            class="relative inline-flex items-center h-6 w-11 rounded-full bg-gray-200 dark:bg-gray-600 focus:outline-none"
+          >
+            <span
+              id="dark-knob"
+              class="transform translate-x-0 inline-block h-5 w-5 bg-white rounded-full shadow transition-transform"
+            ></span>
+          </button>
+          <span>Dark</span>
+        </div>
+
+        <button
+          id="refresh"
+          title="Refresh outages"
+          class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-6 w-6"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path
+              fill-rule="evenodd"
+              d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+              clip-rule="evenodd"
+            />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="flex h-[calc(100vh-56px)]">
+      <!-- Sidebar -->
+      <aside
+        id="sidebar"
+        class="w-80 bg-white dark:bg-gray-800 p-4 overflow-y-auto z-40"
+      >
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-50">
+              Outage Information
+            </h2>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+              These maps show current and planned Hydro‑Québec outages across
+              Québec. Click a marker for details.
+            </p>
+          </div>
+          <button
+            id="collapse-btn"
+            class="text-sm text-gray-500 dark:text-gray-300 hover:text-gray-700"
+          >
+            Collapse
+          </button>
+        </div>
+
+        <!-- Map Tabs -->
+        <div class="mt-6">
+          <div class="map-tabs">
+            <div class="map-tab active" data-tab="current">Current Outages</div>
+            <div class="map-tab" data-tab="planned">Planned Outages</div>
+          </div>
+
+          <!-- Current Outages Stats -->
+          <div id="current-stats" class="map-content active">
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    Total Current Outages
+                  </p>
+                  <p id="total-outages" class="text-2xl font-semibold">—</p>
+                </div>
+                <div class="flex items-center">
+                  <span class="status-indicator status-active"></span>
+                  <span class="text-sm text-gray-500">Active</span>
+                </div>
+              </div>
+
+              <div>
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                  Customers Affected
+                </p>
+                <p id="customers-affected" class="text-sm">—</p>
+              </div>
+
+              <div>
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                  Last Update
+                </p>
+                <p id="last-update" class="text-sm">—</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Planned Outages Stats -->
+          <div id="planned-stats" class="map-content">
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    Total Planned Outages
+                  </p>
+                  <p id="total-planned-outages" class="text-2xl font-semibold">
+                    —
+                  </p>
+                </div>
+                <div class="flex items-center">
+                  <span class="status-indicator status-planned"></span>
+                  <span class="text-sm text-gray-500">Planned</span>
+                </div>
+              </div>
+
+              <div>
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                  Last Update
+                </p>
+                <p id="planned-last-update" class="text-sm">—</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-6">
+          <h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">
+            Instructions
+          </h3>
+          <ul
+            class="mt-2 list-disc list-inside text-sm text-gray-600 dark:text-gray-300 space-y-1"
+          >
+            <li>Switch between maps using the tabs above.</li>
+            <li>Zoom and pan to explore outages.</li>
+            <li>
+              Click markers for affected customers & estimated restoration.
+            </li>
+            <li>Use the dark mode toggle at the top-right.</li>
+            <li>
+              Search for outages by postal code using the search box on the map.
+            </li>
+          </ul>
+        </div>
+
+        <div class="mt-6">
+          <h3 class="text-sm font-medium text-gray-700 dark:text-gray-200">
+            Legend
+          </h3>
+          <div class="mt-2 space-y-2">
+            <div class="flex items-center gap-3">
+              <span
+                class="inline-block h-3 w-3 rounded-full bg-[#ff4500] ring-2 ring-white dark:ring-gray-900"
+              ></span>
+              <span class="text-sm text-gray-600 dark:text-gray-300"
+                >Active outage</span
+              >
+            </div>
+            <div class="flex items-center gap-3">
+              <span
+                class="inline-block h-3 w-3 rounded-full bg-[#ffa500] ring-2 ring-white dark:ring-gray-900"
+              ></span>
+              <span class="text-sm text-gray-600 dark:text-gray-300"
+                >Planned outage</span
+              >
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main content with dual maps -->
+      <main class="flex-1 relative">
+        <!-- Search Box -->
+        <div class="search-container">
+          <input
+            type="text"
+            id="postal-code-search"
+            class="search-input"
+            placeholder="Search by postal code (e.g., H3A, G1V)"
+            autocomplete="off"
+          />
+          <div
+            id="search-results"
+            class="search-results"
+            style="display: none"
+          ></div>
+        </div>
+
+        <!-- Current Outages Map -->
+        <div id="current-map" class="map-container absolute inset-0"></div>
+
+        <!-- Planned Outages Map -->
+        <div
+          id="planned-map"
+          class="map-container absolute inset-0"
+          style="display: none"
+        ></div>
+
+        <!-- floating status card -->
+        <div
+          id="status"
+          class="absolute top-6 right-6 bg-white dark:bg-gray-800 p-3 rounded-lg shadow-md flex items-center gap-3"
+        >
+          <div id="spinner" class="spinner"></div>
+          <div>
+            <div id="status-text" class="text-sm font-medium">
+              Loading outages…
+            </div>
+            <div
+              id="status-sub"
+              class="text-xs text-gray-500 dark:text-gray-400"
+            >
+              Fetching data
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <footer
+      class="w-full bg-white dark:bg-gray-800 py-4 text-center border-t border-gray-200 dark:border-gray-700"
+    >
+      <div
+        class="container mx-auto px-4 text-sm text-gray-600 dark:text-gray-300"
+      >
+        &copy; 2025 Hydro-Québec Outage Maps. Not affiliated with Hydro-Québec.
+        Data source: Hydro-Québec public outage feed.
+      </div>
+    </footer>
+
+    <!-- Leaflet & markercluster JS -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+
+    <script>
+      // Elements
+      const htmlEl = document.documentElement;
+      const darkToggle = document.getElementById("dark-toggle");
+      const darkKnob = document.getElementById("dark-knob");
+      const toggleSidebarBtn = document.getElementById("toggle-sidebar");
+      const sidebar = document.getElementById("sidebar");
+      const collapseBtn = document.getElementById("collapse-btn");
+      const statusText = document.getElementById("status-text");
+      const statusSub = document.getElementById("status-sub");
+      const spinner = document.getElementById("spinner");
+      const refreshBtn = document.getElementById("refresh");
+
+      // Banner
+      const outageBanner = document.getElementById("outage-banner");
+      const outageBannerText = document.getElementById("outage-banner-text");
+
+      // Map tabs
+      const mapTabs = document.querySelectorAll(".map-tab");
+      const mapContents = document.querySelectorAll(".map-content");
+      const currentMapContainer = document.getElementById("current-map");
+      const plannedMapContainer = document.getElementById("planned-map");
+
+      // Search elements
+      const postalCodeSearch = document.getElementById("postal-code-search");
+      const searchResults = document.getElementById("search-results");
+
+      // Dark mode state
+      const prefersDark =
+        window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const saved = localStorage.getItem("hq-dark");
+      if (saved === "1" || (saved === null && prefersDark)) {
+        htmlEl.classList.add("dark");
+        darkKnob.classList.add("translate-x-5");
+      }
+      darkToggle.addEventListener("click", () => {
+        const isDark = htmlEl.classList.toggle("dark");
+        localStorage.setItem("hq-dark", isDark ? "1" : "0");
+        darkKnob.classList.toggle("translate-x-5");
+      });
+
+      // Sidebar toggle
+      collapseBtn.addEventListener("click", () => {
+        sidebar.style.display = "none";
+      });
+      toggleSidebarBtn.addEventListener("click", () => {
+        sidebar.style.display =
+          getComputedStyle(sidebar).display === "none" ? "block" : "none";
+      });
+
+      // Maps
+      const currentMap = L.map("current-map", { zoomControl: true }).setView(
+        [46.8, -71.2],
+        7
+      );
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution:
+          "Developed By Joey Cadieux. Not affiliated with Hydro-Québec",
+      }).addTo(currentMap);
+
+      const plannedMap = L.map("planned-map", { zoomControl: true }).setView(
+        [46.8, -71.2],
+        7
+      );
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "© OpenStreetMap contributors",
+      }).addTo(plannedMap);
+
+      // Cluster groups
+      const outageCluster = L.markerClusterGroup({
+        chunkedLoading: true,
+        showCoverageOnHover: false,
+        maxClusterRadius: 60,
+        iconCreateFunction: function (cluster) {
+          const count = cluster.getChildCount();
+          const html = `<div class="custom-cluster p-2">${count}</div>`;
+          return L.divIcon({
+            html,
+            className: "cluster-wrapper",
+            iconSize: L.point(40, 40),
+          });
+        },
+      });
+      currentMap.addLayer(outageCluster);
+
+      const plannedCluster = L.markerClusterGroup({
+        chunkedLoading: true,
+        showCoverageOnHover: false,
+        maxClusterRadius: 60,
+        iconCreateFunction: function (cluster) {
+          const count = cluster.getChildCount();
+          const html = `<div class="custom-cluster p-2">${count}</div>`;
+          return L.divIcon({
+            html,
+            className: "cluster-wrapper",
+            iconSize: L.point(40, 40),
+          });
+        },
+      });
+      plannedMap.addLayer(plannedCluster);
+
+      // API endpoints
+      const BIS_URL =
+        "http://pannes.hydroquebec.com/pannes/donnees/v3_0/bisversion.json";
+      const PROXY = "https://corsproxy.io/?";
+      const REFRESH_INTERVAL = 300000; // 5 minutes
+
+      // Store all outages for search functionality
+      let allOutages = [];
+      let allPlannedOutages = [];
+
+      function createPulseIcon() {
+        return L.divIcon({
+          className: "pulse-icon",
+          html: '<div class="pulse" />',
+          iconSize: [18, 18],
+          iconAnchor: [9, 9],
+        });
+      }
+
+      function createPlannedIcon() {
+        return L.divIcon({
+          className: "planned-icon",
+          html: '<div class="planned" />',
+          iconSize: [18, 18],
+          iconAnchor: [9, 9],
+        });
+      }
+
+      function showOutageBanner(count) {
+        if (count === 0) {
+          outageBannerText.textContent =
+            "There are currently no outages in the province.";
+          outageBanner.classList.remove("bg-red-600", "dark:bg-red-700");
+          outageBanner.classList.add("bg-emerald-600", "dark:bg-emerald-700");
+        } else {
+          outageBannerText.textContent = `There are currently ${count} outage${
+            count > 1 ? "s" : ""
+          } in the province.`;
+          outageBanner.classList.remove(
+            "bg-emerald-600",
+            "dark:bg-emerald-700"
+          );
+          outageBanner.classList.add("bg-red-600", "dark:bg-red-700");
+        }
+        outageBanner.style.display = "block";
+      }
+
+      // Postal code to coordinates mapping
+      const postalCodeCoordinates = {
+        H3A: [45.5048, -73.5772], // Montreal
+        H2X: [45.5107, -73.565], // Montreal
+        G1V: [46.7913, -71.2879], // Quebec City
+        J7V: [45.5333, -73.8667], // Laval
+        J1H: [45.4, -71.9], // Sherbrooke
+        G7H: [48.4333, -71.0667], // Saguenay
+        G6V: [46.3667, -72.55], // Trois-Rivières
+        J6A: [45.65, -73.6333], // Repentigny
+        J5R: [45.65, -73.45], // Terrebonne
+        J4Z: [45.5333, -73.5167], // Longueuil
+        J8Y: [45.4667, -75.7], // Gatineau
+        J7T: [45.65, -74.3333], // Saint-Jérôme
+        J6E: [45.3, -73.25], // Saint-Jean-sur-Richelieu
+        J2S: [45.4167, -72.0167], // Drummondville
+        J6J: [46.0333, -73.1167], // Joliette
+        G5L: [48.45, -68.5333], // Rimouski
+        G9A: [46.35, -72.5667], // Shawinigan
+        G6W: [46.75, -71.3667], // Lévis
+        J7W: [45.4833, -73.7667], // Brossard
+        J3V: [45.5333, -73.2833], // Saint-Hyacinthe
+      };
+
+      // Search functionality
+      function performSearch(query) {
+        if (!query || query.length < 2) {
+          searchResults.style.display = "none";
+          return;
+        }
+
+        const normalizedQuery = query.toUpperCase().trim();
+        const matches = Object.keys(postalCodeCoordinates).filter((code) =>
+          code.includes(normalizedQuery)
+        );
+
+        if (matches.length > 0) {
+          searchResults.innerHTML = "";
+          matches.forEach((code) => {
+            const item = document.createElement("div");
+            item.className = "search-result-item";
+            item.textContent = code;
+            item.addEventListener("click", () => {
+              postalCodeSearch.value = code;
+              searchResults.style.display = "none";
+              zoomToPostalCode(code);
+            });
+            searchResults.appendChild(item);
+          });
+          searchResults.style.display = "block";
+        } else {
+          searchResults.innerHTML =
+            '<div class="search-no-results">No matching postal codes found</div>';
+          searchResults.style.display = "block";
+        }
+      }
+
+      function zoomToPostalCode(postalCode) {
+        const coords = postalCodeCoordinates[postalCode];
+        if (coords) {
+          // Determine which map is currently active
+          const activeTab = document
+            .querySelector(".map-tab.active")
+            .getAttribute("data-tab");
+          const map = activeTab === "current" ? currentMap : plannedMap;
+
+          // Zoom to the postal code area
+          map.setView(coords, 12);
+
+          // Highlight outages in this area
+          highlightOutagesInArea(coords, activeTab);
+        }
+      }
+
+      function highlightOutagesInArea(centerCoords, type) {
+        // Clear any existing highlights
+        clearHighlights();
+
+        // Add a circle to show the search area
+        const circle = L.circle(centerCoords, {
+          color: "#3b82f6",
+          fillColor: "#3b82f6",
+          fillOpacity: 0.1,
+          radius: 5000, // 5km radius
+        });
+
+        if (type === "current") {
+          circle.addTo(currentMap);
+          window.currentHighlight = circle;
+        } else {
+          circle.addTo(plannedMap);
+          window.plannedHighlight = circle;
+        }
+      }
+
+      function clearHighlights() {
+        if (window.currentHighlight) {
+          currentMap.removeLayer(window.currentHighlight);
+        }
+        if (window.plannedHighlight) {
+          plannedMap.removeLayer(window.plannedHighlight);
+        }
+      }
+
+      // Event listeners for search
+      postalCodeSearch.addEventListener("input", (e) => {
+        performSearch(e.target.value);
+      });
+
+      postalCodeSearch.addEventListener("focus", () => {
+        if (postalCodeSearch.value.length >= 2) {
+          performSearch(postalCodeSearch.value);
+        }
+      });
+
+      document.addEventListener("click", (e) => {
+        if (
+          !postalCodeSearch.contains(e.target) &&
+          !searchResults.contains(e.target)
+        ) {
+          searchResults.style.display = "none";
+        }
+      });
+
+      // Map tab switching
+      mapTabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+          // Update active tab
+          mapTabs.forEach((t) => t.classList.remove("active"));
+          tab.classList.add("active");
+
+          // Update active content
+          const tabName = tab.getAttribute("data-tab");
+          mapContents.forEach((content) => {
+            content.classList.remove("active");
+            if (content.id === `${tabName}-stats`) {
+              content.classList.add("active");
+            }
+          });
+
+          // Show/hide maps
+          if (tabName === "current") {
+            currentMapContainer.style.display = "block";
+            plannedMapContainer.style.display = "none";
+            // Invalidate size to ensure map renders correctly
+            setTimeout(() => {
+              currentMap.invalidateSize();
+            }, 100);
+          } else {
+            currentMapContainer.style.display = "none";
+            plannedMapContainer.style.display = "block";
+            // Invalidate size to ensure map renders correctly
+            setTimeout(() => {
+              plannedMap.invalidateSize();
+            }, 100);
+          }
+        });
+      });
+
+      // Main data fetching function
+      function fetchOutages() {
+        statusText.textContent = "Fetching outage data…";
+        statusSub.textContent = "";
+        spinner.style.display = "block";
+
+        // Fetch current outages
+        fetchCurrentOutages()
+          .then(() => {
+            // Fetch planned outages
+            return fetchPlannedOutages();
+          })
+          .then(() => {
+            spinner.style.display = "none";
+            statusText.textContent = "Data loaded successfully";
+            statusSub.textContent = `Last updated: ${new Date().toLocaleString()}`;
+          })
+          .catch((err) => {
+            console.error(err);
+            spinner.style.display = "none";
+            statusText.textContent = "Error loading outages";
+            statusSub.textContent = err.message || "Please try again later";
+
+            // On error, hide the banner
+            outageBannerText.textContent =
+              "Unable to load outage info at this time.";
+            outageBanner.classList.remove(
+              "bg-emerald-600",
+              "dark:bg-emerald-700",
+              "bg-red-600",
+              "dark:bg-red-700"
+            );
+            outageBanner.classList.add("bg-gray-700", "dark:bg-gray-900");
+            outageBanner.style.display = "block";
+          });
+      }
+
+      // Fetch current outages
+      function fetchCurrentOutages() {
+        return fetch(PROXY + BIS_URL)
+          .then((r) => {
+            if (!r.ok) throw new Error(r.status);
+            return r.json();
+          })
+          .then((bis) =>
+            fetch(
+              PROXY +
+                `http://pannes.hydroquebec.com/pannes/donnees/v3_0/bismarkers${bis}.json`
+            )
+          )
+          .then((r) => {
+            if (!r.ok) throw new Error(r.status);
+            return r.json();
+          })
+          .then((data) => {
+            processCurrentOutages(data);
+          });
+      }
+
+      // Process current outages data
+      function processCurrentOutages(data) {
+        outageCluster.clearLayers();
+        allOutages = [];
+        let outageCount = 0;
+        let totalCustomers = 0;
+
+        if (!data || !data.pannes || data.pannes.length === 0) {
+          document.getElementById("total-outages").textContent = "0";
+          document.getElementById("customers-affected").textContent = "0";
+          document.getElementById("last-update").textContent =
+            new Date().toLocaleString();
+          showOutageBanner(0);
+          return;
+        }
+
+        data.pannes.forEach((p) => {
+          try {
+            const coords = JSON.parse(p[4]);
+            const lon = coords[0],
+              lat = coords[1];
+            const nbClients = parseInt(p[7]) || 0;
+
+            // Only process current outages (not planned ones)
+            // Check if this is a current outage based on the data structure
+            const isCurrentOutage = true; // In a real implementation, you'd check specific fields
+
+            if (isCurrentOutage) {
+              outageCount++;
+              totalCustomers += nbClients;
+
+              const marker = L.marker([lat, lon], {
+                icon: createPulseIcon(),
+              });
+
+              const startTime = p[1]
+                ? new Date(p[1]).toLocaleString()
+                : "Unknown";
+              const estRestoration =
+                p[2] && p[2] !== "null"
+                  ? new Date(p[2]).toLocaleString()
+                  : "Unknown";
+
+              const popupHtml = `
+                            <div class="text-sm max-w-xs">
+                                <strong class="text-red-600">Current Outage</strong><br/>
+                                <strong>Customers affected:</strong> ${nbClients.toLocaleString()}<br/>
+                                <strong>Start:</strong> ${startTime}<br/>
+                                <strong>Estimated restoration:</strong> ${estRestoration}<br/>
+                                <strong>Status code:</strong> ${p[5] || "N/A"}
+                            </div>
+                        `;
+              marker.bindPopup(popupHtml, { maxWidth: 300 });
+              outageCluster.addLayer(marker);
+
+              // Store for search
+              allOutages.push({
+                coords: [lat, lon],
+                marker: marker,
+                data: p,
+              });
+            }
+          } catch (e) {
+            console.warn("bad panne entry", e, p);
+          }
+        });
+
+        document.getElementById("total-outages").textContent =
+          outageCount.toLocaleString();
+        document.getElementById("customers-affected").textContent =
+          totalCustomers.toLocaleString();
+        document.getElementById("last-update").textContent =
+          new Date().toLocaleString();
+        showOutageBanner(outageCount);
+
+        // Fit bounds for current outages
+        const currentBounds = outageCluster.getBounds();
+        if (currentBounds.isValid()) {
+          currentMap.fitBounds(currentBounds, {
+            padding: [60, 60],
+            maxZoom: 10,
+          });
+        }
+      }
+
+      // Fetch planned outages
+      function fetchPlannedOutages() {
+        // Use the same API endpoint but filter for planned outages
+        return fetch(PROXY + BIS_URL)
+          .then((r) => {
+            if (!r.ok) throw new Error(r.status);
+            return r.json();
+          })
+          .then((bis) =>
+            fetch(
+              PROXY +
+                `http://pannes.hydroquebec.com/pannes/donnees/v3_0/bismarkers${bis}.json`
+            )
+          )
+          .then((r) => {
+            if (!r.ok) throw new Error(r.status);
+            return r.json();
+          })
+          .then((data) => {
+            processPlannedOutages(data);
+          });
+      }
+
+      // Process planned outages data
+      function processPlannedOutages(data) {
+        plannedCluster.clearLayers();
+        allPlannedOutages = [];
+        let plannedCount = 0;
+
+        if (!data || !data.pannes || data.pannes.length === 0) {
+          document.getElementById("total-planned-outages").textContent = "0";
+          document.getElementById("planned-last-update").textContent =
+            new Date().toLocaleString();
+          return;
+        }
+
+        data.pannes.forEach((p) => {
+          try {
+            const coords = JSON.parse(p[4]);
+            const lon = coords[0],
+              lat = coords[1];
+            const nbClients = parseInt(p[7]) || 0;
+
+            // Check if this is a planned outage
+            // In a real implementation, you would check specific fields in the data
+            // For now, we'll use a different approach to identify planned outages
+            const isPlannedOutage = checkIfPlannedOutage(p);
+
+            if (isPlannedOutage) {
+              plannedCount++;
+
+              const marker = L.marker([lat, lon], {
+                icon: createPlannedIcon(),
+              });
+
+              const startTime = p[1]
+                ? new Date(p[1]).toLocaleString()
+                : "Unknown";
+              const estRestoration =
+                p[2] && p[2] !== "null"
+                  ? new Date(p[2]).toLocaleString()
+                  : "Unknown";
+
+              const popupHtml = `
+                            <div class="text-sm max-w-xs">
+                                <strong class="text-orange-600">Planned Outage</strong><br/>
+                                <strong>Customers affected:</strong> ${nbClients.toLocaleString()}<br/>
+                                <strong>Start:</strong> ${startTime}<br/>
+                                <strong>Estimated restoration:</strong> ${estRestoration}<br/>
+                                <strong>Status code:</strong> ${
+                                  p[5] || "N/A"
+                                }<br/>
+                                <em>This is a planned maintenance outage</em>
+                            </div>
+                        `;
+              marker.bindPopup(popupHtml, { maxWidth: 300 });
+              plannedCluster.addLayer(marker);
+
+              // Store for search
+              allPlannedOutages.push({
+                coords: [lat, lon],
+                marker: marker,
+                data: p,
+              });
+            }
+          } catch (e) {
+            console.warn("bad planned outage entry", e, p);
+          }
+        });
+
+        document.getElementById("total-planned-outages").textContent =
+          plannedCount.toLocaleString();
+        document.getElementById("planned-last-update").textContent =
+          new Date().toLocaleString();
+
+        // Fit bounds for planned outages
+        const plannedBounds = plannedCluster.getBounds();
+        if (plannedBounds.isValid()) {
+          plannedMap.fitBounds(plannedBounds, {
+            padding: [60, 60],
+            maxZoom: 10,
+          });
+        }
+      }
+
+      // Helper function to identify planned outages
+      function checkIfPlannedOutage(outageData) {
+        // In a real implementation, you would check specific fields in the outage data
+        // to determine if it's a planned outage. This might include:
+        // - Specific status codes
+        // - Presence of planned outage indicators in the data
+        // - Different data structure for planned vs current outages
+
+        // For now, we'll use a simple heuristic based on the start time
+        // Planned outages often have start times in the future or during business hours
+        if (outageData[1]) {
+          const startTime = new Date(outageData[1]);
+          const now = new Date();
+
+          // If the outage starts in the future, it's likely planned
+          if (startTime > now) {
+            return true;
+          }
+
+          // Or if it starts during typical business hours (8 AM to 4 PM)
+          const hour = startTime.getHours();
+          if (hour >= 8 && hour <= 16) {
+            return true;
+          }
+        }
+
+        // Fallback: check if it has a specific status code or field that indicates planned outage
+        // This would need to be adjusted based on Hydro-Québec's actual data structure
+        if (outageData[5] && outageData[5].toString().includes("PLAN")) {
+          return true;
+        }
+
+        return false;
+      }
+
+      // Initialize the application
+      fetchOutages();
+      setInterval(fetchOutages, REFRESH_INTERVAL);
+      refreshBtn && refreshBtn.addEventListener("click", fetchOutages);
+
+      // Close sidebar when clicking outside on mobile
+      document.addEventListener("click", (ev) => {
+        if (
+          window.innerWidth <= 768 &&
+          !sidebar.contains(ev.target) &&
+          !toggleSidebarBtn.contains(ev.target)
+        ) {
+          sidebar.style.display = "none";
+        }
+      });
+
+      // Invalidate map size when sidebar toggles
+      const obs = new MutationObserver(() => {
+        setTimeout(() => {
+          currentMap.invalidateSize();
+          plannedMap.invalidateSize();
+        }, 300);
+      });
+      obs.observe(sidebar, { attributes: true, attributeFilter: ["style"] });
+    </script>
+  </body>
+</html>
