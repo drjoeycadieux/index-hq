@@ -4,13 +4,13 @@
   "description": "A template for HTML and CSS",
   "main": "index.html",
   "scripts": {
-    "start": "serve"
+    "start": "serve --cors"
   },
   "keywords": [
     "html",
     "css"
   ],
-  "author": "Ives van Hoorne",
+  "author": "Joey Cadieux",
   "license": "MIT",
   "devDependencies": {
     "serve": "^11.2.0"
